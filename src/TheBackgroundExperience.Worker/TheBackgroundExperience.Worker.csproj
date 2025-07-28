@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>dotnet-TheBackgroundExperience.Worker-6294c047-8a84-4d4e-a95e-0e2e2327f264</UserSecretsId>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Hosting" />
+        <PackageReference Include="RabbitMQ.Client" />
+        <PackageReference Include="Serilog.Extensions.Hosting" />
+        <PackageReference Include="Serilog.Settings.Configuration" />
+        <PackageReference Include="Serilog.Sinks.Console" />
+        <PackageReference Include="Serilog.Sinks.Debug" />
+        <PackageReference Include="Serilog.Sinks.Seq" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\TheBackgroundExperience.Application\TheBackgroundExperience.Application.csproj" />
+      <ProjectReference Include="..\TheBackgroundExperience.Domain\TheBackgroundExperience.Domain.csproj" />
+      <ProjectReference Include="..\TheBackgroundExperience.Infrastructure\TheBackgroundExperience.Infrastructure.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="..\..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
+    </ItemGroup>
+</Project>

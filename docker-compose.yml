@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    hostname: rabbit-mq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: sa
+      RABBITMQ_DEFAULT_PASS: SuperSecureWith100%Chance
+      RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_ERLANG_COOKIE: supersecretcookie
+    networks:
+      - app-network
+
+  seq:
+    image: datalust/seq:latest
+    container_name: seq
+    ports:
+      - "5341:5341"
+      - "8088:80"
+    environment:
+      - ACCEPT_EULA=Y
+      - SEQ_FIRSTRUN_ADMINPASSWORD=SuperSecureWith100%Chance
+    networks:
+      - app-network
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=SuperSecureWith100%Chance
+    ports:
+      - "1433:1433"
+    networks:
+      - app-network
+
+  webapi:
+    build:
+      context: .
+      dockerfile: src/TheBackgroundExperience.WebApi/Dockerfile
+    container_name: webapi
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__UserName=sa
+      - RabbitMQ__Password=SuperSecureWith100%Chance
+      - RabbitMQ__QueueName=background-experience-queue
+      - Redis__Host=redis
+    depends_on:
+      - rabbitmq
+      - redis
+      - db
+    networks:
+      - app-network
+    ports:
+      - "5000:5000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: src/TheBackgroundExperience.Worker/Dockerfile
+    container_name: worker
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__UserName=sa
+      - RabbitMQ__Password=SuperSecureWith100%Chance
+      - RabbitMQ__QueueName=background-experience-queue
+      - Redis__Host=redis
+    depends_on:
+      - rabbitmq
+      - redis
+      - db
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

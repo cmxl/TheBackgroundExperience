@@ -1,0 +1,18 @@
+<Project>
+
+    <PropertyGroup>
+        <Features>strict</Features>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+        <AnalysisLevel>latest</AnalysisLevel>
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <!--AnalysisMode All is incredibly strict and hinders development speed-->
+        <!--<AnalysisMode>All</AnalysisMode>-->
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
+        <RestoreSources>https://api.nuget.org/v3/index.json</RestoreSources>
+        <Nullable>enable</Nullable>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <WarningsNotAsErrors>NU1903;MSG0005</WarningsNotAsErrors>
+    </PropertyGroup>
+
+</Project>
