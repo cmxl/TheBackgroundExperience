@@ -4,7 +4,7 @@ This is an example of a WebApi (`TheBackgroundExperience.WebApi`) which is built
 The WebApi can modify data (CRUD operations) in a [database](https://hub.docker.com/r/microsoft/mssql-server) using [Entity Framework Core](https://learn.microsoft.com/en-us/ef/core/).
 Then domain events are published to a message broker ([RabbitMQ](https://www.rabbitmq.com/)).
 The `TheBackgroundExperience.Worker` project is a worker service that consumes these domain events and processes them.
-There is also another layer for ~~~~caching data using [Redis](https://hub.docker.com/_/redis) via [FusionCache](https://github.com/ZiggyCreatures/FusionCache).
+There is also another layer for caching data using [Redis](https://hub.docker.com/_/redis) via [FusionCache](https://github.com/ZiggyCreatures/FusionCache).
 Both applications are logging events via [Serilog](https://serilog.net/) to a [Seq](https://datalust.co/seq) server for structured logging.
 
 It is a learning project to get familiar with the technologies and patterns used in modern .NET applications.
