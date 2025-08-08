@@ -126,9 +126,30 @@ Notifications Service Consumer → Broadcast to:
 ```
 
 ### **Notification Topics (RabbitMQ)**
-- Exchange: `notifications` (topic)
-- Routing Keys: `student.created`, `student.updated`, `student.cached`
+- Exchange: `notifications` (topic)  
+- Routing Keys: `student.created`, `student.updated`, `student.cached`, `student.deleted`
 - Queue: `notifications-queue` (consumed by Notifications Service)
+- Routing Pattern: `student.*` (binds to all student events)
+
+### **Notification Payload Structure**
+```json
+{
+  "eventType": "StudentCreated",
+  "routingKey": "student.created", 
+  "student": {
+    "id": "guid",
+    "firstName": "string",
+    "lastName": "string", 
+    "fullName": "string",
+    "updates": "number",
+    "created": "dateTimeOffset",
+    "createdBy": "string?",
+    "lastModified": "dateTimeOffset?",
+    "lastModifiedBy": "string?"
+  },
+  "timestamp": "dateTime",
+  "userId": "string?"
+}
 
 ### **Testing Real-Time Notifications**
 ```bash

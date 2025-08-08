@@ -1,48 +1,146 @@
 # The Background Experience
 
-This is an example of a WebApi (`TheBackgroundExperience.WebApi`) which is built using the [Clean Architecture](https://github.com/ardalis/CleanArchitecture) principles.
-The WebApi can modify data (CRUD operations) in a [database](https://hub.docker.com/r/microsoft/mssql-server) using [Entity Framework Core](https://learn.microsoft.com/en-us/ef/core/).
-Then domain events are published to a message broker ([RabbitMQ](https://www.rabbitmq.com/)).
-The `TheBackgroundExperience.Worker` project is a worker service that consumes these domain events and processes them.
-There is also another layer for caching data using [Redis](https://hub.docker.com/_/redis) via [FusionCache](https://github.com/ZiggyCreatures/FusionCache).
-Both applications are logging events via [Serilog](https://serilog.net/) to a [Seq](https://datalust.co/seq) server for structured logging.
+A .NET 9 **Clean Architecture** demonstration project showcasing a modern microservices architecture with **dual real-time notification system**. This solution demonstrates event-driven communication patterns between microservices with comprehensive real-time client notifications.
 
-It is a learning project to get familiar with the technologies and patterns used in modern .NET applications.
-I have read a lot about different approaches and patterns, but I wanted to try them out myself.
-This project is not meant to be a production-ready application, but rather a starting point for further development.
-There will always be room for improvement and optimization and it is never meant to be perfect.
-Different scenarios and requirements will lead to different implementations, so this is just one way to do it.
+## 🎯 Main Purpose
 
-Keep in mind that this is a simplified example and does not cover all aspects of a real-world application, 
-although I want to try to fill in all those gaps.
+This project demonstrates:
+- **Event-Driven Architecture**: Domain events published via RabbitMQ for loose coupling between services
+- **Real-Time Communications**: Dual notification system using both Server-Sent Events (SSE) and SignalR
+- **Microservices Pattern**: Dedicated services for business logic, background processing, and real-time communications
+- **Clean Architecture**: Separation of concerns with Domain, Application, Infrastructure, and Presentation layers
+- **Modern .NET Patterns**: CQRS with Mediator, distributed caching, and structured logging
 
-## Architecture
+## 🏗️ Architecture Overview
+
+The solution consists of **three main services**:
+
+1. **Business WebAPI** (`TheBackgroundExperience.WebApi`): Core CRUD operations for students
+2. **Background Worker** (`TheBackgroundExperience.Worker`): Processes domain events and manages background tasks
+3. **Notifications Service** (`TheBackgroundExperience.NotificationsApi`): Dedicated real-time communication service
+
+**Supporting Infrastructure:**
+- **Database**: SQL Server with Entity Framework Core for data persistence
+- **Message Broker**: RabbitMQ for event-driven communication
+- **Caching**: Redis with FusionCache for distributed caching and SignalR backplane
+- **Logging**: Serilog with Seq server for structured logging
+
+This is a learning project to explore modern .NET application patterns and technologies. While not production-ready, it serves as a comprehensive starting point for understanding microservices architecture and real-time communication patterns.
+
+## 🔄 System Architecture
+
+```mermaid
+flowchart LR
+    %% Client Layer
+    CLIENT[🖥️ Web Clients<br/>SSE & SignalR]
+    
+    %% Application Services Layer
+    subgraph APP [" Application Services "]
+        direction TB
+        API[🌐 Business API<br/>:5000<br/>Student CRUD]
+        WORKER[⚙️ Background Worker<br/>Event Processing]
+        NOTIFY[🔔 Notifications API<br/>:5001<br/>Real-time Comms]
+    end
+    
+    %% Infrastructure Layer
+    subgraph INFRA [" Infrastructure Services "]
+        direction TB
+        DB[(🗄️ SQL Server<br/>:1433)]
+        MQ[📨 RabbitMQ<br/>:5672/:15672]
+        CACHE[💾 Redis<br/>:6379]
+        LOG[📋 Seq<br/>:5341]
+    end
+
+    %% Main flow connections
+    CLIENT <-->|Real-time| NOTIFY
+    API -->|Events| MQ
+    MQ -->|Process| WORKER
+    WORKER -->|Notifications| MQ
+    MQ -->|Broadcast| NOTIFY
+    
+    %% Data connections
+    API <--> DB
+    WORKER <--> DB
+    API <--> CACHE
+    WORKER <--> CACHE
+    NOTIFY <--> CACHE
+    
+    %% Logging connections
+    API -.->|Logs| LOG
+    WORKER -.->|Logs| LOG
+    NOTIFY -.->|Logs| LOG
+
+    %% Styling
+    classDef appService fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    classDef infraService fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
+    classDef client fill:#e8f5e8,stroke:#388e3c,stroke-width:2px,color:#000
+    
+    class API,WORKER,NOTIFY appService
+    class DB,MQ,CACHE,LOG infraService
+    class CLIENT client
+```
+
+## 🚀 Event-Driven Workflow
+
+This diagram shows the complete flow from a student operation to real-time client notifications:
 
 ```mermaid
 flowchart TD
-
-    subgraph Services 
-        C[SQL Server]
-        D[RabbitMQ]
-        E[Redis]
-        F[Seq]
+    %% Step 1: Client Request
+    START([🖥️ Client Request<br/>POST/PUT Student]) 
+    
+    %% Step 2: Business API Processing
+    API[🌐 Business API<br/>Process CRUD]
+    DB_SAVE[💾 Save to Database]
+    DOMAIN_EVENT[⚡ Raise Domain Event<br/>StudentCreated/Updated]
+    
+    %% Step 3: Event Publishing
+    PUB_EVENT[📤 Publish Event<br/>RabbitMQ]
+    RESPONSE[📨 HTTP Response<br/>200/201 to Client]
+    
+    %% Step 4: Background Processing  
+    CONSUME_EVENT[📥 Worker Consumes<br/>Domain Event]
+    BG_PROCESS[⚙️ Background Processing<br/>Cache Updates, Validation]
+    
+    %% Step 5: Notification Publishing
+    PUB_NOTIFY[📤 Publish Notification<br/>student.created/updated/cached/deleted]
+    
+    %% Step 6: Real-time Distribution
+    CONSUME_NOTIFY[📥 Notifications API<br/>Consumes Event]
+    
+    subgraph REALTIME [" Real-time Broadcast "]
+        direction LR
+        SSE[📡 Server-Sent Events<br/>/api/notifications/stream]
+        SIGNALR[⚡ SignalR Hub<br/>/hubs/notifications]
     end
+    
+    CLIENTS[🖥️ Connected Clients<br/>Receive Updates]
 
-    A[WebApi]
-    subgraph WebApi
-        A -->|CRUD| C
-        A -->|Publish Domain Events| D
-        A -->|Cache Data| E
-        A -->|Log Events| F
-    end
+    %% Flow connections
+    START --> API
+    API --> DB_SAVE
+    API --> DOMAIN_EVENT
+    DOMAIN_EVENT --> PUB_EVENT
+    PUB_EVENT --> RESPONSE
+    PUB_EVENT --> CONSUME_EVENT
+    CONSUME_EVENT --> BG_PROCESS
+    BG_PROCESS --> PUB_NOTIFY
+    PUB_NOTIFY --> CONSUME_NOTIFY
+    CONSUME_NOTIFY --> SSE
+    CONSUME_NOTIFY --> SIGNALR
+    SSE --> CLIENTS
+    SIGNALR --> CLIENTS
 
-    B[Worker]
-    subgraph Worker
-        D -->|Consume Domain Events| B
-        B -->|CRUD| C
-        B -->|Cache Data| E
-        B -->|Log Events| F
-    end
+    %% Styling
+    classDef startEnd fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#fff
+    classDef process fill:#2196f3,stroke:#1565c0,stroke-width:2px,color:#fff
+    classDef event fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#fff
+    classDef realtime fill:#9c27b0,stroke:#6a1b9a,stroke-width:2px,color:#fff
+    
+    class START,CLIENTS startEnd
+    class API,DB_SAVE,BG_PROCESS,RESPONSE process
+    class DOMAIN_EVENT,PUB_EVENT,CONSUME_EVENT,PUB_NOTIFY,CONSUME_NOTIFY event
+    class SSE,SIGNALR realtime
 ```
 
 ## Getting Started
@@ -67,12 +165,13 @@ docker compose up -d
 ```
 
 This will start a new network with the following services:
-  - `mssql`: The SQL Server database. (localhost, 1433)
+  - `db`: The SQL Server database. (localhost, 1433)
   - `rabbitmq`: The RabbitMQ message broker. (http://localhost:15672/)
   - `redis`: The Redis cache. (localhost, 6379)
   - `seq`: The Seq logging server. (http://localhost:5341/)
-  - `webapi`: The WebApi application. (http://localhost:5000/)
-  - `worker`: The worker service that consumes domain events. 
+  - `webapi`: The Business WebAPI application. (http://localhost:5000/)
+  - `worker`: The background worker service that processes domain events.
+  - `notifications`: The Notifications API service with real-time communications. (http://localhost:5001/) 
 
 The first start of the applications will also create the database if it does not yet exist.
 But no migrations will be applied (for now), so make sure to delete the database if you want to change something in the entities / schema, and restart either the `worker` or the `webapi`.
@@ -83,33 +182,86 @@ Update the appsettings.{env}.json files in the `WebApi` and `Worker` projects wi
 The development environment uses `localhost` to access the services running in the Docker container (`appsettings.Development.json`).
 In production, you should use the service names defined in the `docker-compose.yml` file (see `appsettings.json`).
 
-### Further Development
+### 🔔 Testing Real-Time Notifications
 
-#### WebApi
+After starting all services, you can test the real-time notification system:
 
-- Authentication and Authorization
-- Validation
-- More granular error handling
+1. **Access Test Pages** (served by NotificationsApi):
+   - **Landing Page**: http://localhost:5001/
+   - **SSE Test**: http://localhost:5001/sse-test.html
+   - **SignalR Test**: http://localhost:5001/signalr-test.html
 
-#### Worker
+2. **Perform Student Operations** via Business API:
+   ```bash
+   # Create a student (triggers real-time notifications)
+   curl -X POST http://localhost:5000/api/students \
+     -H "Content-Type: application/json" \
+     -d '{"firstName":"John","lastName":"Doe","email":"john.doe@example.com"}'
+   
+   # Update a student (triggers real-time notifications)
+   curl -X PUT http://localhost:5000/api/students/1 \
+     -H "Content-Type: application/json" \
+     -d '{"firstName":"Jane","lastName":"Doe","email":"jane.doe@example.com"}'
+   ```
 
-- Error handling
-- Retry logic
+3. **Watch Real-Time Updates**: Open the test pages in your browser and perform operations via the API to see live notifications.
 
-#### Infrastructure
+## 🛠️ Project Structure
 
-- Database [migrations](https://learn.microsoft.com/en-us/ef/core/cli/dotnet#dotnet-ef-migrations-add) `dotnet ef migrations add`
-- Database performance [optimizations](https://learn.microsoft.com/en-us/ef/core/cli/dotnet#dotnet-ef-dbcontext-optimize) `dotnet ef dbcontext optimize`
-- Database seeding (currently empty)
+```
+src/
+├── TheBackgroundExperience.Domain/          # Core domain entities and events
+├── TheBackgroundExperience.Application/     # Business logic with CQRS/Mediator
+├── TheBackgroundExperience.Infrastructure/  # Data access and external services
+├── TheBackgroundExperience.WebApi/          # Business REST API (Port 5000)
+├── TheBackgroundExperience.Worker/          # Background processing service
+└── TheBackgroundExperience.NotificationsApi/ # Real-time communications (Port 5001)
+```
 
-#### Client
+## 🔧 Development Commands
 
-- A client application to interact with the WebApi (possibly [Angular](https://angular.dev/))
-- Can be hosted inside an ASP.NET Core application or as a separate application
+```bash
+# Build entire solution
+dotnet build
 
-#### General
+# Add Entity Framework migration
+dotnet ef migrations add <MigrationName> --project src/TheBackgroundExperience.Infrastructure --startup-project src/TheBackgroundExperience.WebApi
 
-- Notifications between WebApi, Worker and Client (e.g. via [SignalR](https://dotnet.microsoft.com/en-us/apps/aspnet/signalr))
-- Unit tests
-- Integration tests
-- End-to-end tests
+# Update database
+dotnet ef database update --project src/TheBackgroundExperience.Infrastructure --startup-project src/TheBackgroundExperience.WebApi
+
+# Run services individually (requires Docker infrastructure)
+cd src/TheBackgroundExperience.WebApi && dotnet run       # Business API
+cd src/TheBackgroundExperience.Worker && dotnet run       # Background Worker  
+cd src/TheBackgroundExperience.NotificationsApi && dotnet run  # Notifications Service
+```
+
+## 🚀 Future Enhancements
+
+### Core Features
+- **Authentication & Authorization**: JWT tokens, role-based access control
+- **Validation**: FluentValidation with comprehensive business rules  
+- **Error Handling**: Global exception handling with detailed error responses
+- **API Versioning**: Versioned endpoints for backward compatibility
+
+### Infrastructure
+- **Database Migrations**: Automated migration deployment
+- **Database Seeding**: Sample data and initial setup
+- **Health Checks**: Service health monitoring endpoints
+- **Docker Optimization**: Multi-stage builds, health checks
+
+### Testing & Quality
+- **Unit Tests**: Comprehensive test coverage for all layers
+- **Integration Tests**: API and database integration testing
+- **End-to-End Tests**: Full workflow testing with real services
+- **Performance Testing**: Load testing for real-time notifications
+
+### Observability
+- **Distributed Tracing**: OpenTelemetry integration
+- **Metrics Collection**: Prometheus integration
+- **Application Insights**: Advanced monitoring and alerting
+
+### Client Applications
+- **Web Frontend**: React/Angular SPA consuming the APIs
+- **Mobile Apps**: Real-time notifications on mobile platforms
+- **Admin Dashboard**: Service management and monitoring interface
