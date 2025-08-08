@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Notifications - SSE Test (Dedicated Service)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .notification {
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+        }
+        .notification.created { border-left-color: #28a745; }
+        .notification.updated { border-left-color: #ffc107; }
+        .notification.cached { border-left-color: #17a2b8; }
+        .timestamp {
+            font-size: 0.8em;
+            color: #6c757d;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .clear-btn {
+            background-color: #dc3545;
+        }
+        .clear-btn:hover {
+            background-color: #c82333;
+        }
+        .service-badge {
+            display: inline-block;
+            background-color: #6f42c1;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Student Notifications - SSE Test <span class="service-badge">Notifications Service</span></h1>
+        
+        <div class="controls">
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            <button class="clear-btn" onclick="clearNotifications()">Clear Notifications</button>
+            <a href="http://localhost:5000/api/students" target="_blank" style="margin-left: 20px; text-decoration: none;">
+                <button style="background-color: #28a745;">Test API (Port 5000)</button>
+            </a>
+        </div>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        <div style="font-size: 0.9em; color: #6c757d; margin: 10px 0;">
+            <strong>Service:</strong> Notifications API (Port 5001) | 
+            <strong>Endpoint:</strong> /api/notifications/students/stream
+        </div>
+        
+        <div id="notifications"></div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let notificationCount = 0;
+        
+        const statusEl = document.getElementById('status');
+        const notificationsEl = document.getElementById('notifications');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        
+        function connect() {
+            if (eventSource) {
+                disconnect();
+            }
+            
+            // Connect to Notifications Service (Port 5001)
+            eventSource = new EventSource('/api/notifications/students/stream');
+            
+            eventSource.onopen = function(event) {
+                updateStatus('Connected to Notifications Service', 'connected');
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            };
+            
+            eventSource.onerror = function(event) {
+                updateStatus('Connection Error', 'disconnected');
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            };
+            
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                addNotification('message', data);
+            };
+            
+            // Listen for specific event types
+            eventSource.addEventListener('connected', function(event) {
+                const data = JSON.parse(event.data);
+                addNotification('connected', data);
+            });
+            
+            eventSource.addEventListener('StudentCreated', function(event) {
+                const data = JSON.parse(event.data);
+                addNotification('created', data);
+            });
+            
+            eventSource.addEventListener('StudentUpdated', function(event) {
+                const data = JSON.parse(event.data);
+                addNotification('updated', data);
+            });
+            
+            eventSource.addEventListener('StudentCached', function(event) {
+                const data = JSON.parse(event.data);
+                addNotification('cached', data);
+            });
+        }
+        
+        function disconnect() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            updateStatus('Disconnected', 'disconnected');
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+        }
+        
+        function updateStatus(message, className) {
+            statusEl.textContent = message;
+            statusEl.className = `status ${className}`;
+        }
+        
+        function addNotification(type, data) {
+            notificationCount++;
+            
+            const div = document.createElement('div');
+            div.className = `notification ${type}`;
+            
+            const timestamp = new Date(data.timestamp || new Date()).toLocaleString();
+            
+            let content = `
+                <div><strong>Event:</strong> ${data.eventType || type} <span class="service-badge">Notifications Service</span></div>
+                <div class="timestamp">Time: ${timestamp}</div>
+            `;
+            
+            if (data.student) {
+                content += `
+                    <div><strong>Student ID:</strong> ${data.student.id}</div>
+                    <div><strong>First Name:</strong> ${data.student.firstName || 'N/A'}</div>
+                    <div><strong>Last Name:</strong> ${data.student.lastName || 'N/A'}</div>
+                    <div><strong>Email:</strong> ${data.student.email || 'N/A'}</div>
+                `;
+                
+                if (data.student.updates !== undefined) {
+                    content += `<div><strong>Updates Count:</strong> ${data.student.updates}</div>`;
+                }
+            }
+            
+            if (data.routingKey) {
+                content += `<div><strong>Routing Key:</strong> ${data.routingKey}</div>`;
+            }
+            
+            if (data.clientId) {
+                content += `<div><strong>Client ID:</strong> ${data.clientId}</div>`;
+            }
+            
+            div.innerHTML = content;
+            
+            // Insert at the top
+            notificationsEl.insertBefore(div, notificationsEl.firstChild);
+            
+            // Update document title with count
+            document.title = `(${notificationCount}) Student Notifications - SSE Test (Dedicated Service)`;
+        }
+        
+        function clearNotifications() {
+            notificationsEl.innerHTML = '';
+            notificationCount = 0;
+            document.title = 'Student Notifications - SSE Test (Dedicated Service)';
+        }
+        
+        // Auto-connect on page load
+        window.onload = function() {
+            connect();
+        };
+        
+        // Clean up on page unload
+        window.onbeforeunload = function() {
+            disconnect();
+        };
+    </script>
+</body>
+</html>

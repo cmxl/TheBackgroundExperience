@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Notifications - SignalR Test (Dedicated Service)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f8ff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .connecting { background-color: #fff3cd; color: #856404; }
+        .notification {
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #dc3545;
+            background-color: #f8f9fa;
+        }
+        .notification.created { border-left-color: #28a745; }
+        .notification.updated { border-left-color: #ffc107; }
+        .notification.cached { border-left-color: #17a2b8; }
+        .notification.connected { border-left-color: #6f42c1; }
+        .timestamp {
+            font-size: 0.8em;
+            color: #6c757d;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #c82333;
+        }
+        .connect-btn {
+            background-color: #28a745;
+        }
+        .connect-btn:hover {
+            background-color: #218838;
+        }
+        .clear-btn {
+            background-color: #6c757d;
+        }
+        .clear-btn:hover {
+            background-color: #5a6268;
+        }
+        .service-badge {
+            display: inline-block;
+            background-color: #6f42c1;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .signalr-badge {
+            display: inline-block;
+            background-color: #dc3545;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Student Notifications - SignalR Test <span class="service-badge">Notifications Service</span></h1>
+        
+        <div class="controls">
+            <button id="connectBtn" class="connect-btn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            <button class="clear-btn" onclick="clearNotifications()">Clear Notifications</button>
+            <button onclick="testConnection()" style="background-color: #007bff;">Test Connection</button>
+            <a href="http://localhost:5000/api/students" target="_blank" style="margin-left: 10px; text-decoration: none;">
+                <button style="background-color: #28a745;">Test API (Port 5000)</button>
+            </a>
+        </div>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        <div style="font-size: 0.9em; color: #6c757d; margin: 10px 0;">
+            <strong>Service:</strong> Notifications API (Port 5001) | 
+            <strong>Hub:</strong> /hubs/notifications
+        </div>
+        
+        <div id="notifications"></div>
+    </div>
+
+    <!-- SignalR JavaScript Client -->
+    <script src="https://unpkg.com/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
+
+    <script>
+        let connection = null;
+        let notificationCount = 0;
+        
+        const statusEl = document.getElementById('status');
+        const notificationsEl = document.getElementById('notifications');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        
+        function connect() {
+            if (connection) {
+                disconnect();
+            }
+            
+            updateStatus('Connecting...', 'connecting');
+            
+            // Create new SignalR connection to Notifications Service
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/hubs/notifications", {
+                    withCredentials: false
+                })
+                .withAutomaticReconnect([0, 2000, 10000, 30000])
+                .configureLogging(signalR.LogLevel.Information)
+                .build();
+
+            // Connection event handlers
+            connection.onclose(function (error) {
+                updateStatus('Disconnected', 'disconnected');
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                if (error) {
+                    console.error('SignalR connection closed with error:', error);
+                }
+            });
+
+            connection.onreconnecting(function (error) {
+                updateStatus('Reconnecting...', 'connecting');
+                if (error) {
+                    console.error('SignalR reconnecting due to error:', error);
+                }
+            });
+
+            connection.onreconnected(function (connectionId) {
+                updateStatus('Reconnected to Notifications Service', 'connected');
+                console.log('SignalR reconnected with connection ID:', connectionId);
+            });
+
+            // Message handlers
+            connection.on("Connected", function (data) {
+                addNotification('connected', data);
+                console.log('Connected to Notifications Service SignalR hub:', data);
+            });
+
+            connection.on("StudentCreated", function (data) {
+                addNotification('created', data);
+                console.log('Student created:', data);
+            });
+
+            connection.on("StudentUpdated", function (data) {
+                addNotification('updated', data);
+                console.log('Student updated:', data);
+            });
+
+            connection.on("StudentCached", function (data) {
+                addNotification('cached', data);
+                console.log('Student cached:', data);
+            });
+
+            // Generic message handler for any other events
+            connection.on("NotificationReceived", function (eventType, data) {
+                addNotification(eventType.toLowerCase(), data);
+                console.log(`Generic notification (${eventType}):`, data);
+            });
+
+            // Start the connection
+            connection.start()
+                .then(function () {
+                    updateStatus(`Connected to Notifications Service (${connection.connectionId?.substring(0, 8)}...)`, 'connected');
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    console.log('SignalR connection to Notifications Service started successfully');
+                })
+                .catch(function (error) {
+                    updateStatus('Connection Failed', 'disconnected');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    console.error('SignalR connection failed:', error);
+                    addNotification('error', {
+                        message: 'Failed to connect to Notifications Service SignalR hub',
+                        error: error.toString(),
+                        timestamp: new Date()
+                    });
+                });
+        }
+        
+        function disconnect() {
+            if (connection) {
+                connection.stop()
+                    .then(function () {
+                        console.log('SignalR connection stopped');
+                    })
+                    .catch(function (error) {
+                        console.error('Error stopping SignalR connection:', error);
+                    });
+                connection = null;
+            }
+            updateStatus('Disconnected', 'disconnected');
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+        }
+        
+        function testConnection() {
+            if (connection && connection.state === signalR.HubConnectionState.Connected) {
+                addNotification('test', {
+                    message: 'Connection test - SignalR to Notifications Service is working!',
+                    connectionState: connection.state,
+                    connectionId: connection.connectionId,
+                    timestamp: new Date()
+                });
+            } else {
+                addNotification('error', {
+                    message: 'SignalR connection to Notifications Service is not established',
+                    connectionState: connection ? connection.state : 'No Connection',
+                    timestamp: new Date()
+                });
+            }
+        }
+        
+        function updateStatus(message, className) {
+            statusEl.textContent = message;
+            statusEl.className = `status ${className}`;
+        }
+        
+        function addNotification(type, data) {
+            notificationCount++;
+            
+            const div = document.createElement('div');
+            div.className = `notification ${type}`;
+            
+            const timestamp = new Date(data.timestamp || new Date()).toLocaleString();
+            
+            let content = `
+                <div><strong>Event:</strong> ${data.eventType || type} <span class="signalr-badge">SignalR</span> <span class="service-badge">Notifications Service</span></div>
+                <div class="timestamp">Time: ${timestamp}</div>
+            `;
+            
+            if (data.student) {
+                content += `
+                    <div><strong>Student ID:</strong> ${data.student.id}</div>
+                    <div><strong>First Name:</strong> ${data.student.firstName || 'N/A'}</div>
+                    <div><strong>Last Name:</strong> ${data.student.lastName || 'N/A'}</div>
+                    <div><strong>Email:</strong> ${data.student.email || 'N/A'}</div>
+                `;
+                
+                if (data.student.updates !== undefined) {
+                    content += `<div><strong>Updates Count:</strong> ${data.student.updates}</div>`;
+                }
+            }
+            
+            if (data.routingKey) {
+                content += `<div><strong>Routing Key:</strong> ${data.routingKey}</div>`;
+            }
+            
+            if (data.clientId) {
+                content += `<div><strong>Client ID:</strong> ${data.clientId}</div>`;
+            }
+            
+            if (data.connectionId) {
+                content += `<div><strong>Connection ID:</strong> ${data.connectionId}</div>`;
+            }
+
+            if (data.message) {
+                content += `<div><strong>Message:</strong> ${data.message}</div>`;
+            }
+
+            if (data.error) {
+                content += `<div style="color: #dc3545;"><strong>Error:</strong> ${data.error}</div>`;
+            }
+            
+            div.innerHTML = content;
+            
+            // Insert at the top
+            notificationsEl.insertBefore(div, notificationsEl.firstChild);
+            
+            // Update document title with count
+            document.title = `(${notificationCount}) Student Notifications - SignalR Test (Dedicated Service)`;
+        }
+        
+        function clearNotifications() {
+            notificationsEl.innerHTML = '';
+            notificationCount = 0;
+            document.title = 'Student Notifications - SignalR Test (Dedicated Service)';
+        }
+        
+        // Auto-connect on page load
+        window.onload = function() {
+            connect();
+        };
+        
+        // Clean up on page unload
+        window.onbeforeunload = function() {
+            disconnect();
+        };
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                console.log('Page became visible');
+                if (connection && connection.state !== signalR.HubConnectionState.Connected) {
+                    console.log('Attempting to reconnect SignalR...');
+                    connect();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

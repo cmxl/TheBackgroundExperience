@@ -10,6 +10,7 @@ using TheBackgroundExperience.Application.Common.Interfaces;
 using TheBackgroundExperience.Application.Configuration;
 using TheBackgroundExperience.Infrastructure.Persistence;
 using TheBackgroundExperience.Infrastructure.Persistence.Interceptors;
+using TheBackgroundExperience.Infrastructure.Notifications;
 using TheBackgroundExperience.Infrastructure.Queues;
 using TheBackgroundExperience.Infrastructure.Services;
 
@@ -69,6 +70,7 @@ public static class ServiceCollectionExtensions
 		});
 		
 		services.AddSingleton<IQueueManager, QueueManager>();
+		services.AddSingleton<INotificationService, NotificationService>();
 		
 		return services;
 	}

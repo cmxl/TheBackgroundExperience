@@ -18,6 +18,7 @@ builder.Services.AddSerilog((sp, config) =>
 	      .ReadFrom.Configuration(builder.Configuration);
 });
 
+// Add hosted services
 builder.Services.AddHostedService<StudentQueueWorker>();
 
 var host = builder.Build();

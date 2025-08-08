@@ -89,6 +89,27 @@ services:
     networks:
       - app-network
 
+  notifications:
+    build:
+      context: .
+      dockerfile: src/TheBackgroundExperience.NotificationsApi/Dockerfile
+    container_name: notifications
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__UserName=sa
+      - RabbitMQ__Password=SuperSecureWith100%Chance
+      - RabbitMQ__QueueName=notifications-queue
+      - Redis__Host=redis
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - app-network
+    ports:
+      - "5001:5001"
+
 networks:
   app-network:
     driver: bridge
