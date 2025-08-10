@@ -45,5 +45,37 @@ else
 
 app.UseHttpsRedirection();
 
+// Add health checks endpoints
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+	ResponseWriter = async (context, report) =>
+	{
+		context.Response.ContentType = "application/json";
+		var response = new
+		{
+			status = report.Status.ToString(),
+			checks = report.Entries.Select(x => new
+			{
+				name = x.Key,
+				status = x.Value.Status.ToString(),
+				exception = x.Value.Exception?.Message,
+				duration = x.Value.Duration.ToString(),
+				data = x.Value.Data
+			})
+		};
+		await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(response, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+	}
+});
+
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+	Predicate = check => check.Tags.Contains("ready")
+});
+
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+	Predicate = _ => false
+});
+
 app.MapControllers();
 app.Run();

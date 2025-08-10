@@ -11,6 +11,7 @@ COPY ["Directory.Packages.props", "."]
 COPY ["src/TheBackgroundExperience.NotificationsApi/TheBackgroundExperience.NotificationsApi.csproj", "src/TheBackgroundExperience.NotificationsApi/"]
 COPY ["src/TheBackgroundExperience.Domain/TheBackgroundExperience.Domain.csproj", "src/TheBackgroundExperience.Domain/"]
 COPY ["src/TheBackgroundExperience.Application/TheBackgroundExperience.Application.csproj", "src/TheBackgroundExperience.Application/"]
+COPY ["src/TheBackgroundExperience.Infrastructure/TheBackgroundExperience.Infrastructure.csproj", "src/TheBackgroundExperience.Infrastructure/"]
 RUN dotnet restore "./src/TheBackgroundExperience.NotificationsApi/TheBackgroundExperience.NotificationsApi.csproj"
 COPY . .
 WORKDIR "/src/src/TheBackgroundExperience.NotificationsApi"

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using TheBackgroundExperience.Application.Common.Interfaces;
+using TheBackgroundExperience.Infrastructure.Messaging;
 using TheBackgroundExperience.Application.Configuration;
 using TheBackgroundExperience.Domain.Common.Notifications;
 using TheBackgroundExperience.Domain.Events.Notifications;
@@ -13,16 +14,16 @@ namespace TheBackgroundExperience.Infrastructure.Notifications;
 public class NotificationService : INotificationService
 {
 	private readonly ILogger<NotificationService> _logger;
-	private readonly IConnectionFactory _connectionFactory;
+	private readonly IRabbitMqConnectionPool _connectionPool;
 	private readonly RabbitMqConfig _config;
 
 	public NotificationService(
 		ILogger<NotificationService> logger,
-		IConnectionFactory connectionFactory,
+		IRabbitMqConnectionPool connectionPool,
 		IOptions<RabbitMqConfig> options)
 	{
 		_logger = logger;
-		_connectionFactory = connectionFactory;
+		_connectionPool = connectionPool;
 		_config = options.Value;
 	}
 
@@ -30,42 +31,42 @@ public class NotificationService : INotificationService
 	{
 		try
 		{
-			await using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
-			await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
-
-			// Declare the notifications exchange as topic
-			await channel.ExchangeDeclareAsync(
-				NotificationTopics.ExchangeName, 
-				ExchangeType.Topic, 
-				durable: true,
-				cancellationToken: cancellationToken);
-
-			var properties = new BasicProperties
+			await _connectionPool.ExecuteWithChannelAsync(async (channel, ct) =>
 			{
-				Persistent = true,
-				ContentType = "application/json",
-				MessageId = Guid.NewGuid().ToString(),
-				Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
-				Headers = new Dictionary<string, object?>
+				// Declare the notifications exchange as topic
+				await channel.ExchangeDeclareAsync(
+					NotificationTopics.ExchangeName, 
+					ExchangeType.Topic, 
+					durable: true,
+					cancellationToken: ct);
+
+				var properties = new BasicProperties
 				{
-					["eventType"] = notification.EventType,
-					["routingKey"] = notification.RoutingKey
-				}
-			};
+					Persistent = true,
+					ContentType = "application/json",
+					MessageId = Guid.NewGuid().ToString(),
+					Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
+					Headers = new Dictionary<string, object?>
+					{
+						["eventType"] = notification.EventType,
+						["routingKey"] = notification.RoutingKey
+					}
+				};
 
-			var messageBody = JsonSerializer.Serialize(notification, JsonSerializerOptions.Web);
-			var body = Encoding.UTF8.GetBytes(messageBody);
+				var messageBody = JsonSerializer.Serialize(notification, JsonSerializerOptions.Web);
+				var body = Encoding.UTF8.GetBytes(messageBody);
 
-			await channel.BasicPublishAsync(
-				NotificationTopics.ExchangeName,
-				notification.RoutingKey,
-				mandatory: false,
-				properties,
-				body,
-				cancellationToken);
+				await channel.BasicPublishAsync(
+					NotificationTopics.ExchangeName,
+					notification.RoutingKey,
+					mandatory: false,
+					properties,
+					body,
+					ct);
 
-			_logger.LogInformation("Published notification: {EventType} for Student {StudentId}", 
-				notification.EventType, notification.Student.Id);
+				_logger.LogDebug("Published notification: {EventType} for Student {StudentId}", 
+					notification.EventType, notification.Student.Id);
+			}, cancellationToken);
 		}
 		catch (Exception ex)
 		{

@@ -2,16 +2,21 @@
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
+using StackExchange.Redis;
 using TheBackgroundExperience.Application.Common;
 using TheBackgroundExperience.Application.Common.Interfaces;
 using TheBackgroundExperience.Application.Configuration;
+using TheBackgroundExperience.Infrastructure.HealthChecks;
+using TheBackgroundExperience.Infrastructure.Messaging;
+using TheBackgroundExperience.Infrastructure.Notifications;
 using TheBackgroundExperience.Infrastructure.Persistence;
 using TheBackgroundExperience.Infrastructure.Persistence.Interceptors;
-using TheBackgroundExperience.Infrastructure.Notifications;
 using TheBackgroundExperience.Infrastructure.Queues;
+using TheBackgroundExperience.Infrastructure.Resilience;
 using TheBackgroundExperience.Infrastructure.Services;
 
 namespace TheBackgroundExperience.Infrastructure;
@@ -29,8 +34,17 @@ public static class ServiceCollectionExtensions
 		
 		// Register infrastructure services here
 		services.AddSingleton<IDateTime, DateTimeService>();
+		
+		// Add configuration
+		services.Configure<ResilienceConfig>(configuration.GetSection(ResilienceConfig.SectionName));
+		services.Configure<RabbitMqConnectionPoolConfig>(configuration.GetSection(RabbitMqConnectionPoolConfig.SectionName));
+		
+		// Add resilience
+		services.AddSingleton<ResiliencePipelineFactory>();
+		
 		services.AddPersistence(configuration);
-		services.AddRabbitMq();
+		services.AddRabbitMq(configuration);
+		services.AddHealthChecks(configuration);
 		
 		return services;
 	}
@@ -56,7 +70,7 @@ public static class ServiceCollectionExtensions
 		return services;
 	}
 	
-	private static IServiceCollection AddRabbitMq(this IServiceCollection services)
+	private static IServiceCollection AddRabbitMq(this IServiceCollection services, IConfiguration configuration)
 	{
 		services.AddSingleton<IConnectionFactory>(sp =>
 		{
@@ -69,9 +83,42 @@ public static class ServiceCollectionExtensions
 			};
 		});
 		
+		services.AddSingleton<IRabbitMqConnectionPool, RabbitMqConnectionPool>();
 		services.AddSingleton<IQueueManager, QueueManager>();
 		services.AddSingleton<INotificationService, NotificationService>();
 		
+		return services;
+	}
+
+	private static IServiceCollection AddHealthChecks(this IServiceCollection services, IConfiguration configuration)
+	{
+		var healthChecksBuilder = services.AddHealthChecks();
+
+		// Add Entity Framework health check
+		healthChecksBuilder.AddDbContextCheck<ApplicationDbContext>(
+			"database",
+			HealthStatus.Degraded,
+			new[] { "db", "database" });
+
+		// Add RabbitMQ health check
+		healthChecksBuilder.AddCheck<RabbitMqHealthCheck>(
+			name: "rabbitmq",
+			failureStatus: HealthStatus.Degraded,
+			tags: new[] { "messaging", "rabbitmq" });
+
+		// Add Redis health check if Redis connection string exists
+		var redisConnectionString = configuration.GetConnectionString("Redis");
+		if (!string.IsNullOrEmpty(redisConnectionString))
+		{
+			services.AddSingleton<IConnectionMultiplexer>(sp =>
+				ConnectionMultiplexer.Connect(redisConnectionString));
+
+			healthChecksBuilder.AddCheck<RedisHealthCheck>(
+				name: "redis",
+				failureStatus: HealthStatus.Degraded,
+				tags: new[] { "cache", "redis" });
+		}
+
 		return services;
 	}
 }
