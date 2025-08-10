@@ -3,32 +3,31 @@ using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using TheBackgroundExperience.Application.Configuration;
+using TheBackgroundExperience.Infrastructure.Messaging;
 
 namespace TheBackgroundExperience.Worker.Workers;
 
 public abstract class QueueWorkerBase : BackgroundService
 {
-	private readonly IConnectionFactory _factory;
+	private readonly IRabbitMqConnectionPool _connectionPool;
 	private readonly ILogger _logger;
 	private readonly RabbitMqConfig _config;
 	private IChannel? _channel;
-	private IConnection? _connection;
 	private AsyncEventingBasicConsumer? _consumer;
 
 	public QueueWorkerBase(
 		ILogger logger,
 		IOptions<RabbitMqConfig> options,
-		IConnectionFactory factory)
+		IRabbitMqConnectionPool connectionPool)
 	{
 		_logger = logger;
-		_factory = factory;
+		_connectionPool = connectionPool;
 		_config = options.Value;
 	}
 
 	public override async Task StartAsync(CancellationToken cancellationToken)
 	{
-		_connection = await _factory.CreateConnectionAsync(cancellationToken);
-		_channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
+		_channel = await _connectionPool.GetChannelAsync(cancellationToken);
 		await _channel.QueueDeclareAsync(_config.QueueName, _config.Durable, _config.Exclusive, _config.AutoDelete, cancellationToken: cancellationToken);
 		await _channel.BasicQosAsync(0, _config.PrefetchCount, false, cancellationToken);
 
@@ -51,18 +50,10 @@ public abstract class QueueWorkerBase : BackgroundService
 
 	public override async Task StopAsync(CancellationToken cancellationToken)
 	{
-		if (_channel?.IsOpen == true)
+		if (_channel != null)
 		{
-			await _channel.CloseAsync(cancellationToken);
-			await _channel.DisposeAsync();
+			await _connectionPool.ReturnChannelAsync(_channel, cancellationToken);
 			_channel = null;
-		}
-
-		if (_connection?.IsOpen == true)
-		{
-			await _connection.CloseAsync(cancellationToken);
-			await _connection.DisposeAsync();
-			_connection = null;
 		}
 
 		_consumer = null;

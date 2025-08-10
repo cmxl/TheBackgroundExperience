@@ -6,6 +6,7 @@ using TheBackgroundExperience.Application.Configuration;
 using TheBackgroundExperience.Application.Students.Queries;
 using TheBackgroundExperience.Domain.Entities;
 using TheBackgroundExperience.Domain.Events;
+using TheBackgroundExperience.Infrastructure.Messaging;
 
 namespace TheBackgroundExperience.Worker.Workers;
 
@@ -18,8 +19,8 @@ public class StudentQueueWorker : JsonQueueWorker<Student>
 		IServiceProvider serviceProvider,
 		ILogger<StudentQueueWorker> logger, 
 		IOptions<RabbitMqConfig> options, 
-		IConnectionFactory factory) 
-		: base(logger, options, factory)
+		IRabbitMqConnectionPool connectionPool) 
+		: base(logger, options, connectionPool)
 	{
 		_serviceProvider = serviceProvider;
 		_logger = logger;

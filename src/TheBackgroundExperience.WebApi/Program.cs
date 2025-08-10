@@ -3,6 +3,7 @@ using TheBackgroundExperience.Application;
 using TheBackgroundExperience.Infrastructure;
 using TheBackgroundExperience.Infrastructure.Persistence;
 using TheBackgroundExperience.WebApi;
+using TheBackgroundExperience.WebApi.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,6 +45,9 @@ else
 }
 
 app.UseHttpsRedirection();
+
+// Add request deduplication middleware before controllers
+app.UseMiddleware<RequestDeduplicationMiddleware>();
 
 // Add health checks endpoints
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions

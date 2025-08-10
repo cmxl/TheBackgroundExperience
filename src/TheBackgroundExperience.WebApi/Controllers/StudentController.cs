@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using TheBackgroundExperience.Application.Students.Commands;
 using TheBackgroundExperience.Application.Students.Queries;
 using TheBackgroundExperience.Domain.Entities;
+using TheBackgroundExperience.WebApi.Middleware;
 
 namespace TheBackgroundExperience.WebApi.Controllers;
 
@@ -33,6 +34,7 @@ public class StudentController : ControllerBase
 	}
 
 	[HttpPut("{id}")]
+	[DeduplicateRequest(5)] // Prevent duplicate updates within 5 seconds
 	public async Task<ActionResult> Update([FromRoute] Guid id, CancellationToken cancellationToken)
 	{
 		var fake = _faker.Generate();
@@ -48,6 +50,7 @@ public class StudentController : ControllerBase
 	}
 	
 	[HttpGet("{id}")]
+	[DeduplicateRequest(30)] // Cache GET requests for 30 seconds
 	public async Task<ActionResult<Student>> GetById([FromRoute] Guid id, CancellationToken cancellationToken)
 	{
 		var student = new GetStudentByIdQuery(id);

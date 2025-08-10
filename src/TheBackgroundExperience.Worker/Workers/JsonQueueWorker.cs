@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using TheBackgroundExperience.Application.Configuration;
+using TheBackgroundExperience.Infrastructure.Messaging;
 
 namespace TheBackgroundExperience.Worker.Workers;
 
@@ -10,8 +11,8 @@ public abstract class JsonQueueWorker<T> : QueueWorkerBase
 	protected JsonQueueWorker(
 		ILogger<JsonQueueWorker<T>> logger,
 		IOptions<RabbitMqConfig> options,
-		IConnectionFactory factory)
-		: base(logger, options, factory)
+		IRabbitMqConnectionPool connectionPool)
+		: base(logger, options, connectionPool)
 	{
 	}
 
